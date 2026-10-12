@@ -226,6 +226,8 @@ main{position:relative;z-index:1}
 .tile.newtile{animation:newpop .5s}
 @keyframes newpop{0%{transform:translateY(-18px) scale(.6);opacity:0}70%{transform:translateY(3px) scale(1.08)}100%{transform:none;opacity:1}}
 .blank{display:inline-block;border-bottom:3px solid #FF8A1F;color:#FF8A1F;min-width:48px;text-align:center}
+.meter{height:12px;border:2px solid var(--panel-edge,#1D2B45);border-radius:999px;overflow:hidden;background:#fff;margin:6px 0}
+.meter i{display:block;height:100%;width:0;background:#58B947;transition:width .05s}
 </style>
 </head>
 <body>
@@ -453,6 +455,7 @@ function listen(target,onRes,onErr){
 
 /* ---------- map ---------- */
 function showMap(){
+  if(micStream){ try{ micStream.getTracks().forEach(t=>t.stop()); }catch(e){} micStream=null; }
   stopTimer();
   app.innerHTML=`
     <div class="logorow"><h1 class="logo"><span class="q">本文</span>JUMP</h1>${buddy('mapb')}</div>
@@ -478,7 +481,7 @@ function showMap(){
               <span class="stars">${allDone? q.items.filter((_,i)=>pp.paper[i]).length+'/'+q.items.length : '🔒'}</span></button>
           </div></div>`}).join('')}`).join('')}
     <div class="row" style="margin-top:18px">
-      <span class="small" style="opacity:.6;margin-right:8px">版 10/12-d</span><button class="linkbtn" id="snd">効果音：${save.sound?'オン':'オフ'}</button>
+      <span class="small" style="opacity:.6;margin-right:8px">版 10/12-e</span><button class="linkbtn" id="snd">効果音：${save.sound?'オン':'オフ'}</button>
       <button class="linkbtn" id="mreq">マイク必須：${save.micRequired?'オン':'オフ'}（保護者用・2秒長押し）</button>
     </div>`;
   app.querySelectorAll('[data-lesson]').forEach(b=>b.onclick=()=>{ sfx.tap(); startLesson(findLesson(b.dataset.lesson)); });
@@ -551,45 +554,55 @@ function itemDone(clean){
 }
 
 /* mic gate (共通) : text を声に出して言えたら onNext */
+/* ---------- 声の有無だけを見る(発音は判定しない) ---------- */
+let micStream=null, micCtx=null;
+async function levelMeter(){
+  if(!micStream) micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+  micCtx=micCtx||new (window.AudioContext||window.webkitAudioContext)();
+  if(micCtx.state==='suspended') await micCtx.resume();
+  const src=micCtx.createMediaStreamSource(micStream), an=micCtx.createAnalyser(); an.fftSize=512; src.connect(an);
+  const buf=new Uint8Array(an.fftSize);
+  return { read(){ an.getByteTimeDomainData(buf); let s=0; for(const v of buf){ const x=(v-128)/128; s+=x*x; } return Math.sqrt(s/buf.length); }, stop(){ try{src.disconnect()}catch(e){} } };
+}
 function micGate(host,text,onNext,lead){
-  const useMic=SR&&!micBlocked;
+  const canMic=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)&&!micBlocked;
   host.innerHTML=`
     <div class="win">
       ${lead||''}
       <p class="big">${esc(text)}</p>
-      <p class="say">${useMic?'🎤を押して、声に出して言ってみよう。':'声に出して1回言ってみよう。'}</p>
+      <p class="say">${canMic?'🎤を押して、声に出して言ってみよう。声が出ていればOK！':'声に出して1回言ってみよう。'}</p>
+      ${canMic?`<div class="meter"><i id="lvl"></i></div>`:''}
       <p class="heard" id="heard" aria-live="polite"></p>
       <div class="actions"><button class="btn" id="again">🔊 お手本</button>
-        ${useMic?`<button class="btn mic" id="mic">🎤 言ってみる</button>`:`<button class="btn go" id="next" disabled>声に出して言ってね…</button>`}</div>
+        ${canMic?`<button class="btn mic" id="mic">🎤 言ってみる</button>`:`<button class="btn go" id="next">言えた！ 次へ</button>`}</div>
+      <p class="center" style="margin:8px 0 0" id="selfrow" hidden><button class="linkbtn" id="selfok">言えた！ 次へ</button></p>
     </div>`;
   $('#again').onclick=()=>speak(text);
   const heard=$('#heard'), goNext=()=>{ sfx.tap(); onNext(); };
-  const selfNext=btn=>{ let left=Math.max(2,Math.ceil(text.split(' ').length*0.5)); btn.disabled=true;
-    const t=setInterval(()=>{ left--; if(!document.body.contains(btn)){clearInterval(t);return}
-      if(left>0) btn.textContent=`声に出して言ってね…${left}`; else { clearInterval(t); btn.disabled=false; btn.textContent='言えた！ 次へ'; btn.onclick=goNext; } },1000); };
-  if(!useMic){ heard.textContent='この画面ではマイクが使えないので、声に出して言えたら次へ'; selfNext($('#next')); return; }
-  let tries=0, rec=null; const mic=$('#mic');
-  const toNext=label=>{ mic.classList.remove('on','mic'); mic.classList.add('go'); mic.textContent=label; mic.onclick=goNext; };
-  const pass=msg=>{ S.mic++; sfx.coin(); setBuddy('pb','jump'); heard.className='heard ok'; heard.textContent=msg; fb('いい声！ バッチリ！','ok'); toNext('次へ'); };
-  const retry=msg=>{ tries++; setBuddy('pb',''); heard.className='heard'; heard.textContent=msg;
-    if(tries>=4){ toNext('次へ'); fb('たくさんチャレンジしたね！ 次へ進もう','ok'); return; }
-    mic.textContent='🎤 もう一度';
-    fb(tries===1?'いいね！ 🔊お手本をまねして、もう1回':'つぎは声が出ていればOKだよ！','ok'); };
-  mic.onclick=()=>{
-    if(rec) return; mic.classList.add('on'); mic.textContent='聞いてるよ…'; fb('聞いてるよ。どうぞ！');
-    rec=listen(text,(said,score)=>{
-      rec=null; mic.classList.remove('on');
-      if(tries>=2){ if((said||'').trim()) pass('声が聞こえたよ！ OK！'); else retry('声が小さかったみたい。もう少し大きな声で！'); return; }
-      const need=tries===0?0.5:0.3;
-      if(score>=need) pass('聞こえたよ：「'+said+'」');
-      else retry(tries===0?'おしい！ もう少しで聞きとれそう':'あと1回！ 次は声が出ていればOK');
-    },err=>{
-      rec=null; mic.classList.remove('on');
-      if(['not-allowed','service-not-allowed','start','audio-capture'].includes(err)){
-        micBlocked=true; heard.className='heard'; heard.textContent='マイクが使えないみたい。声に出して言えたら次へ進もう。';
-        mic.outerHTML='<button class="btn go" id="next" disabled>声に出して言ってね…</button>'; selfNext($('#next'));
-      } else retry('声が聞きとれなかったよ。🎤を押してから、大きな声で言ってね');
-    });
+  if(!canMic){ $('#next').onclick=goNext; return; }
+  $('#selfok').onclick=goNext;
+  const mic=$('#mic'); let busy=false;
+  mic.onclick=async()=>{
+    if(busy) return; busy=true; try{ speechSynthesis.cancel(); }catch(e){}
+    mic.classList.add('on'); mic.textContent='聞いてるよ…'; fb('どうぞ！ 大きな声で！');
+    let m;
+    try{ m=await levelMeter(); }catch(e){ micBlocked=true; busy=false; mic.classList.remove('on');
+      heard.textContent='マイクが使えないみたい。声に出して言えたら次へ進もう。'; mic.outerHTML='<button class="btn go" id="next">言えた！ 次へ</button>'; $('#next').onclick=goNext; return; }
+    const lvl=$('#lvl'); let t=0, base=0, n=0, voiced=0;
+    const timer=setInterval(()=>{
+      const v=m.read(); t+=50;
+      if(t<=250){ base+=v; n++; } 
+      const th=Math.max(0.03,(n?base/n:0)*2.2);
+      if(lvl) lvl.style.width=Math.min(100,v*400)+'%';
+      if(t>250&&v>th) voiced+=50;
+      if(voiced>=300){ end(true); } else if(t>=6000){ end(false); }
+    },50);
+    function end(ok){ clearInterval(timer); m.stop(); busy=false; mic.classList.remove('on'); if(lvl) lvl.style.width='0';
+      if(ok){ S.mic++; sfx.coin(); setBuddy('pb','jump'); heard.className='heard ok'; heard.textContent='声が聞こえたよ！'; fb('いい声！ バッチリ！','ok');
+        mic.classList.remove('mic'); mic.classList.add('go'); mic.textContent='次へ'; mic.onclick=goNext; }
+      else { heard.className='heard'; heard.textContent='声が聞こえなかったみたい。もう一度、大きな声でどうぞ'; fb('マイクに近づけて言ってみよう','ok');
+        mic.textContent='🎤 もう一度'; $('#selfrow').hidden=false; }
+    }
   };
 }
 
