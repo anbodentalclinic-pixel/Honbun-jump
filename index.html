@@ -478,7 +478,7 @@ function showMap(){
               <span class="stars">${allDone? q.items.filter((_,i)=>pp.paper[i]).length+'/'+q.items.length : '🔒'}</span></button>
           </div></div>`}).join('')}`).join('')}
     <div class="row" style="margin-top:18px">
-      <span class="small" style="opacity:.6;margin-right:8px">版 10/12-c</span><button class="linkbtn" id="snd">効果音：${save.sound?'オン':'オフ'}</button>
+      <span class="small" style="opacity:.6;margin-right:8px">版 10/12-d</span><button class="linkbtn" id="snd">効果音：${save.sound?'オン':'オフ'}</button>
       <button class="linkbtn" id="mreq">マイク必須：${save.micRequired?'オン':'オフ'}（保護者用・2秒長押し）</button>
     </div>`;
   app.querySelectorAll('[data-lesson]').forEach(b=>b.onclick=()=>{ sfx.tap(); startLesson(findLesson(b.dataset.lesson)); });
@@ -570,22 +570,25 @@ function micGate(host,text,onNext,lead){
   if(!useMic){ heard.textContent='この画面ではマイクが使えないので、声に出して言えたら次へ'; selfNext($('#next')); return; }
   let tries=0, rec=null; const mic=$('#mic');
   const toNext=label=>{ mic.classList.remove('on','mic'); mic.classList.add('go'); mic.textContent=label; mic.onclick=goNext; };
-  const failed=msg=>{ tries++; S.itemMiss++; setBuddy('pb','sad'); heard.className='heard'; heard.textContent=msg;
-    if(tries>=2){ toNext('がんばった! 次へ'); fb('2回チャレンジしたからOK! 次へ進もう','ok'); }
-    else { mic.textContent='🎤 もう一度'; fb('もう一度、ゆっくり言ってみよう（次は少しゆるく判定するよ）','ng'); } };
+  const pass=msg=>{ S.mic++; sfx.coin(); setBuddy('pb','jump'); heard.className='heard ok'; heard.textContent=msg; fb('いい声！ バッチリ！','ok'); toNext('次へ'); };
+  const retry=msg=>{ tries++; setBuddy('pb',''); heard.className='heard'; heard.textContent=msg;
+    if(tries>=4){ toNext('次へ'); fb('たくさんチャレンジしたね！ 次へ進もう','ok'); return; }
+    mic.textContent='🎤 もう一度';
+    fb(tries===1?'いいね！ 🔊お手本をまねして、もう1回':'つぎは声が出ていればOKだよ！','ok'); };
   mic.onclick=()=>{
     if(rec) return; mic.classList.add('on'); mic.textContent='聞いてるよ…'; fb('聞いてるよ。どうぞ！');
     rec=listen(text,(said,score)=>{
       rec=null; mic.classList.remove('on');
-      const need=tries>=1?0.45:0.6;
-      if(score>=need){ S.mic++; sfx.coin(); setBuddy('pb','jump'); heard.className='heard ok'; heard.textContent='聞こえたよ：「'+said+'」'; fb('バッチリ！','ok'); toNext('次へ'); }
-      else failed('「'+(said||'…')+'」に聞こえたよ');
+      if(tries>=2){ if((said||'').trim()) pass('声が聞こえたよ！ OK！'); else retry('声が小さかったみたい。もう少し大きな声で！'); return; }
+      const need=tries===0?0.5:0.3;
+      if(score>=need) pass('聞こえたよ：「'+said+'」');
+      else retry(tries===0?'おしい！ もう少しで聞きとれそう':'あと1回！ 次は声が出ていればOK');
     },err=>{
       rec=null; mic.classList.remove('on');
       if(['not-allowed','service-not-allowed','start','audio-capture'].includes(err)){
         micBlocked=true; heard.className='heard'; heard.textContent='マイクが使えないみたい。声に出して言えたら次へ進もう。';
         mic.outerHTML='<button class="btn go" id="next" disabled>声に出して言ってね…</button>'; selfNext($('#next'));
-      } else failed('うまく聞きとれなかったよ。🎤を押してから、はっきり言ってね');
+      } else retry('声が聞きとれなかったよ。🎤を押してから、大きな声で言ってね');
     });
   };
 }
