@@ -481,7 +481,7 @@ function showMap(){
               <span class="stars">${allDone? q.items.filter((_,i)=>pp.paper[i]).length+'/'+q.items.length : '🔒'}</span></button>
           </div></div>`}).join('')}`).join('')}
     <div class="row" style="margin-top:18px">
-      <span class="small" style="opacity:.6;margin-right:8px">版 10/12-g</span><button class="linkbtn" id="snd">効果音：${save.sound?'オン':'オフ'}</button>
+      <span class="small" style="opacity:.6;margin-right:8px">版 10/12-h</span><button class="linkbtn" id="snd">効果音：${save.sound?'オン':'オフ'}</button>
       <button class="linkbtn" id="mreq">マイク必須：${save.micRequired?'オン':'オフ'}（保護者用・2秒長押し）</button>
     </div>`;
   app.querySelectorAll('[data-lesson]').forEach(b=>b.onclick=()=>{ sfx.tap(); startLesson(findLesson(b.dataset.lesson)); });
@@ -565,45 +565,47 @@ async function levelMeter(){
   return { read(){ an.getByteTimeDomainData(buf); let s=0; for(const v of buf){ const x=(v-128)/128; s+=x*x; } return Math.sqrt(s/buf.length); }, stop(){ try{src.disconnect()}catch(e){} } };
 }
 function micGate(host,text,onNext,lead){
-  const canMic=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)&&!micBlocked;
+  const useMic=!!SR&&!micBlocked;
   host.innerHTML=`
     <div class="win">
       ${lead||''}
-      <p class="big">${esc(text)}</p>
-      <p class="say">${canMic?'🎤を押して、文をさいごまで声に出して読もう。声ゲージがいっぱいになればOK！':'声に出して1回言ってみよう。'}</p>
-      ${canMic?`<div class="meter"><i id="lvl"></i></div>`:''}
+      <p class="big" id="bigline">${esc(text)}</p>
+      <p class="say">${useMic?'🎤を押して、文をさいごまで声に出して読もう。':'声に出して1回言ってみよう。'}</p>
       <p class="heard" id="heard" aria-live="polite"></p>
       <div class="actions"><button class="btn" id="again">🔊 お手本</button>
-        ${canMic?`<button class="btn mic" id="mic">🎤 言ってみる</button>`:`<button class="btn go" id="next">言えた！ 次へ</button>`}</div>
-      <p class="center" style="margin:10px 0 0" id="selfrow"><button class="btn" id="selfok" style="width:100%">言えた！ 次へ</button></p>
+        ${useMic?`<button class="btn mic" id="mic">🎤 言ってみる</button>`:`<button class="btn go" id="next">言えた！ 次へ</button>`}</div>
     </div>`;
   $('#again').onclick=()=>speak(text);
   const heard=$('#heard'), goNext=()=>{ sfx.tap(); onNext(); };
-  if(!canMic){ $('#next').onclick=goNext; return; }
-  $('#selfok').onclick=goNext;
-  const mic=$('#mic'); let busy=false;
-  mic.onclick=async()=>{
-    if(busy) return; busy=true; try{ speechSynthesis.cancel(); }catch(e){}
-    mic.classList.add('on'); mic.textContent='聞いてるよ…'; fb('どうぞ！ 大きな声で！');
-    let m;
-    try{ m=await levelMeter(); }catch(e){ micBlocked=true; busy=false; mic.classList.remove('on');
-      heard.textContent='マイクが使えないみたい。声に出して言えたら次へ進もう。'; mic.outerHTML='<button class="btn go" id="next">言えた！ 次へ</button>'; $('#next').onclick=goNext; return; }
-    const lvl=$('#lvl'); let t=0, base=0, n=0, voiced=0;
-    const words=text.split(' ').length, need=Math.max(800, words*260), limit=Math.max(6000, words*1300);
-    const timer=setInterval(()=>{
-      const v=m.read(); t+=50;
-      if(t<=300){ base+=v; n++; return; }
-      const th=Math.max(0.045,(base/n)*3);
-      if(v>th) voiced+=50;
-      if(lvl) lvl.style.width=Math.min(100,voiced/need*100)+'%';
-      if(voiced>=need){ end(true); } else if(t>=limit){ end(false); }
-    },50);
-    function end(ok){ clearInterval(timer); m.stop(); busy=false; mic.classList.remove('on'); if(lvl&&!ok) lvl.style.width='0';
-      if(ok){ S.mic++; sfx.coin(); setBuddy('pb','jump'); heard.className='heard ok'; heard.textContent='声が聞こえたよ！'; fb('いい声！ バッチリ！','ok');
-        mic.classList.remove('mic'); mic.classList.add('go'); mic.textContent='次へ'; mic.onclick=goNext; $('#selfrow').hidden=true; }
-      else { heard.className='heard'; heard.textContent='ゲージがいっぱいにならなかったよ。さいごまで大きな声で読んでみよう'; fb('マイクに近づけて言ってみよう','ok');
-        mic.textContent='🎤 もう一度'; }
-    }
+  if(!useMic){ $('#next').onclick=goNext; return; }
+  const words=text.split(' ');
+  const keyOf=w=>norm(w).filter(x=>!JPW.has(x));
+  const counted=words.map(w=>keyOf(w).length>0);
+  const total=Math.max(1,counted.filter(Boolean).length);
+  let got=new Set(), tries=0, rec=null; const mic=$('#mic');
+  const paint=()=>{ $('#bigline').innerHTML=words.map((w,i)=>`<span style="${got.has(i)?'color:#2E9D57;text-decoration:underline':''}">${esc(w)}</span>`).join(' '); };
+  const toNext=label=>{ mic.classList.remove('on','mic'); mic.classList.add('go'); mic.textContent=label; mic.onclick=goNext; };
+  const NEED=[0.4,0.25,0.01];
+  const judge=said=>{
+    const h=norm(said||''); const now=new Set();
+    words.forEach((w,i)=>{ if(!counted[i]) return; const ks=keyOf(w); if(ks.every(k=>h.some(x=>wEq(k,x)))) now.add(i); });
+    now.forEach(i=>got.add(i)); paint();
+    const ratio=now.size/total, need=NEED[Math.min(tries,2)];
+    if(now.size>0 && ratio>=need){ S.mic++; sfx.coin(); setBuddy('pb','jump'); heard.className='heard ok';
+      heard.textContent=`${total}語中 ${now.size}語 きこえたよ！`; fb(ratio>=0.7?'すごい！ ばっちり伝わったよ':'いいね！ 伝わったよ','ok'); toNext('次へ'); return; }
+    tries++; setBuddy('pb',''); heard.className='heard';
+    heard.textContent=now.size?`${total}語中 ${now.size}語 きこえたよ！ あと少し`:'うまく聞きとれなかったよ';
+    if(tries>=3){ toNext('がんばった！ 次へ'); fb('3回チャレンジしたね！ 次へ進もう','ok'); return; }
+    mic.textContent='🎤 もう一度';
+    fb(tries===1?'緑じゃない単語を、はっきり言ってみよう':'次は1語でもきこえたらOK！','ok');
+  };
+  mic.onclick=()=>{
+    if(rec) return; mic.classList.add('on'); mic.textContent='聞いてるよ…'; fb('どうぞ！ さいごまで読もう');
+    rec=listen(text,(said)=>{ rec=null; mic.classList.remove('on'); judge(said); },
+      err=>{ rec=null; mic.classList.remove('on');
+        if(['not-allowed','service-not-allowed','start','audio-capture'].includes(err)){
+          micBlocked=true; heard.className='heard'; heard.textContent='マイクが使えないみたい。声に出して言えたら次へ進もう。'; toNext('言えた！ 次へ');
+        } else judge(''); });
   };
 }
 
