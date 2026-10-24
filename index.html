@@ -226,6 +226,7 @@ main{position:relative;z-index:1}
 .tile.newtile{animation:newpop .5s}
 @keyframes newpop{0%{transform:translateY(-18px) scale(.6);opacity:0}70%{transform:translateY(3px) scale(1.08)}100%{transform:none;opacity:1}}
 .blank{display:inline-block;border-bottom:3px solid #FF8A1F;color:#FF8A1F;min-width:48px;text-align:center}
+.okw{color:#1E9A4A;font-weight:800;text-decoration:underline}
 </style>
 </head>
 <body>
@@ -447,14 +448,24 @@ function lcs(a,b){ const d=Array(b.length+1).fill(0);
   for(const x of a){ let prev=0; for(let j=1;j<=b.length;j++){ const tmp=d[j]; d[j]= x===b[j-1] ? prev+1 : Math.max(d[j],d[j-1]); prev=tmp; } }
   return d[b.length]; }
 function matchScore(heard,target){ const t=norm(target).filter(w=>!JPW.has(w)), h=norm(heard); return t.length ? lcs(t,h)/t.length : 1; }
+/* 音読は正誤判定しない：何か声が聞きとれたら合格。途中の聞きとり（interim）も使う */
 function listen(target,onRes,onErr){
-  const r=new SR(); r.lang='en-US'; r.interimResults=false; r.maxAlternatives=5; let done=false;
-  r.onresult=e=>{ done=true; const alts=[...e.results[0]].map(a=>a.transcript);
-    let best=alts[0]||'',bs=0; alts.forEach(a=>{ const sc=matchScore(a,target); if(sc>bs){bs=sc;best=a;} }); onRes(best,bs); };
-  r.onerror=e=>{ done=true; onErr(e.error); };
-  r.onend=()=>{ if(!done) onErr('no-speech'); };
-  try{ speechSynthesis.cancel(); r.start(); }catch(e){ onErr('start'); }
+  const r=new SR(); r.lang='en-US'; r.interimResults=true; r.maxAlternatives=5; r.continuous=false;
+  let done=false, best='', bs=0;
+  const finish=()=>{ if(done) return; done=true; clearTimeout(tm); try{ r.stop(); }catch(e){}
+    if(best.trim()) onRes(best,bs); else onErr('no-speech'); };
+  const tm=setTimeout(finish,8000);
+  r.onresult=e=>{ for(let i=e.resultIndex;i<e.results.length;i++){ [...e.results[i]].forEach(a=>{ const t=a.transcript||''; const sc=matchScore(t,target); if(t.trim()&&(sc>=bs||!best)){ bs=sc; best=t; } }); if(e.results[i].isFinal) finish(); } };
+  r.onspeechend=()=>setTimeout(finish,600);
+  r.onerror=e=>{ if(done) return; if(e.error==='no-speech'||e.error==='aborted'){ finish(); return; } done=true; clearTimeout(tm); onErr(e.error); };
+  r.onend=()=>finish();
+  try{ speechSynthesis.cancel(); r.start(); }catch(e){ done=true; clearTimeout(tm); onErr('start'); }
   return r;
+}
+/* 聞きとれた単語を緑にして見せる（合否には使わない） */
+function greenWords(text,said){
+  const h=new Set(norm(said));
+  return text.split(' ').map(w=>{ const k=norm(w)[0]; return k&&h.has(k)?`<span class="okw">${esc(w)}</span>`:esc(w); }).join(' ');
 }
 
 /* ---------- map ---------- */
@@ -580,19 +591,18 @@ function micGate(host,text,onNext,lead){
     if(rec) return; mic.classList.add('on'); mic.textContent='聞いてるよ…'; fb('聞いてるよ。どうぞ！');
     rec=listen(text,(said,score)=>{
       rec=null; mic.classList.remove('on');
-      const need=tries>=3?0.6:0.8;
-      if(score>=need){ S.mic++; sfx.coin(); setBuddy('pb','jump'); heard.className='heard ok'; heard.textContent='聞こえたよ：「'+said+'」'; fb('バッチリ！','ok'); toNext('次へ'); }
-      else { tries++; S.itemMiss++; setBuddy('pb','sad'); heard.className='heard'; heard.textContent='「'+(said||'…')+'」に聞こえたよ';
-        fb(tries>=2?'おしい！ 🔊お手本を聞いてから、もう1回':'もう一度、ゆっくり言ってみよう','ng');
-        if(tries>=3&&!strict) toNext('次へ'); else mic.textContent='🎤 もう一度';
-        if(tries===3) heard.textContent+='（次からは少しゆるく判定するよ）'; }
+      S.mic++; sfx.coin(); setBuddy('pb','jump'); heard.className='heard ok';
+      heard.innerHTML='声が出たね！ 合格。<br><span class="small">聞きとれた単語：</span>'+greenWords(text,said);
+      fb(score>=0.8?'バッチリ！':'合格！ 緑の単語が聞きとれたよ','ok'); toNext('次へ');
     },err=>{
       rec=null; mic.classList.remove('on');
       if(['not-allowed','service-not-allowed','start','audio-capture'].includes(err)){
         micBlocked=true; heard.className='heard';
         if(strict){ heard.textContent='この画面ではマイクが使えないので先へ進めません。おうちの人に「マイク必須」をオフにしてもらってね。'; mic.remove(); }
         else { heard.textContent='マイクが使えないみたい。声に出して言えたら次へ進もう。'; toNext('言えた！ 次へ'); }
-      } else { heard.className='heard'; heard.textContent='声が聞こえなかったよ。ボタンを押してから言ってね。'; mic.textContent='🎤 もう一度'; }
+      } else { tries++; heard.className='heard';
+        if(tries>=2){ heard.textContent='マイクがうまく聞きとれないみたい。声に出して言えたら次へ進もう。'; toNext('言えた！ 次へ'); }
+        else { heard.textContent='声が聞こえなかったよ。🎤を押してから、少し大きめの声で言ってね。'; mic.textContent='🎤 もう一度'; } }
     });
   };
 }
