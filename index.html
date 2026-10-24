@@ -226,8 +226,6 @@ main{position:relative;z-index:1}
 .tile.newtile{animation:newpop .5s}
 @keyframes newpop{0%{transform:translateY(-18px) scale(.6);opacity:0}70%{transform:translateY(3px) scale(1.08)}100%{transform:none;opacity:1}}
 .blank{display:inline-block;border-bottom:3px solid #FF8A1F;color:#FF8A1F;min-width:48px;text-align:center}
-.meter{height:12px;border:2px solid var(--panel-edge,#1D2B45);border-radius:999px;overflow:hidden;background:#fff;margin:6px 0}
-.meter i{display:block;height:100%;width:0;background:#58B947;transition:width .05s}
 </style>
 </head>
 <body>
@@ -283,7 +281,18 @@ const PROGRAMS=[
    T("Miki","What do you mean?","どういう意味?"),
    T("Daniel","Some people join Pajama Day for charity.","チャリティーのためにパジャマデーに参加する人もいるんだ。"),
    T("Daniel","They support sick children in hospitals.","入院している病気の子どもたちを支援しているんだよ。"),
-   T("Miki","That's wonderful!","すばらしいね!")]}
+   T("Miki","That's wonderful!","すばらしいね!")]},
+  {id:"5-P",name:"Power-Up 2",pages:"p.70",items:[
+   T("Ken","Which umbrella is yours, the blue one or the yellow one?","どっちのかさがきみの? 青いの、それとも黄色いの?"),
+   T("Emily","The yellow one is mine.","黄色いのが私のよ。"),
+   T("Ken","Here you are.","はい、どうぞ。"),
+   T("Emily","Thank you.","ありがとう。"),
+   T("Ken","Whose umbrella is the blue one?","青いのはだれのかさ?"),
+   T("Emily","It's Mao's.","真央のよ。"),
+   T("Daniel","Whose pen is this?","これはだれのペン?"),
+   T("Mao","It's mine.","私のよ。"),
+   T("Daniel","Which pen case is yours, Mao?","真央、どっちの筆箱がきみの?"),
+   T("Mao","The big one is.","大きいほうよ。")]}
  ]},
  {id:6,title:"The Way to School",parts:[
   {id:"6-1",name:"Part 1",pages:"p.75",items:[
@@ -347,6 +356,7 @@ const WORDS={
         W("excellent","すばらしい"),W("traditional","伝統的な"),W("custard pudding","カスタードプリン"),W("sweet","甘い"),W("delicious","とてもおいしい")],
  "5-1":[W("cousin","いとこ"),W("live","住む"),W("pajamas","パジャマ"),W("school uniform","制服"),W("Just kidding.","冗談だよ。"),W("common","ふつうの・よくある"),W("spend","過ごす"),W("photo","写真"),W("students","生徒(複数)"),W("teachers","先生(複数)"),W("really","本当に"),W("funny","おもしろい")],
  "5-2":[W("only","～だけ"),W("company","会社"),W("companies","会社(複数)"),W("work","働く"),W("all day","一日中"),W("proud","誇りに思って"),W("be proud of","～を誇りに思う"),W("mean","意味する"),W("charity","チャリティー・慈善"),W("support","支える・支援する"),W("uncle","おじ"),W("often","よく・しばしば"),W("talk","話す"),W("join","参加する"),W("sick","病気の"),W("hospital","病院"),W("wonderful","すばらしい")],
+ "5-P":[W("which","どちらの"),W("whose","だれの"),W("mine","私のもの"),W("yours","あなたのもの"),W("his","彼のもの"),W("hers","彼女のもの"),W("ours","私たちのもの"),W("Ken's","健のもの"),W("bike","自転車"),W("umbrella","かさ"),W("pen case","筆箱"),W("Here you are.","はい、どうぞ。")],
  "6-1":[W("respect","尊敬する"),W("tell","話す・伝える"),W("hour","時間(60分)"),W("across","～を横切って"),W("savanna","サバンナ"),W("tough","たいへんな"),W("Kenya","ケニア"),W("every morning","毎朝"),W("kilometer","キロメートル"),W("run","走る"),W("walk","歩く"),W("take","(時間が)かかる")],
  "6-2":[W("amazing","すごい"),W("dangerous","危険な"),W("attack","おそう"),W("schoolchildren","通学中の子どもたち"),W("safe","安全な"),W("parent","親"),W("pray","祈る"),W("safety","安全"),W("has","持っている(haveの三単現)"),W("what's","what is の短縮形"),W("airplane","飛行機"),W("you know","～だよね"),W("No way!","まさか!"),W("dream","夢"),W("sometimes","ときどき")],
  "7-1":[W("Sydney","シドニー"),W("exactly","その通り"),W("lot","たくさん(a lot of)"),W("a lot of","たくさんの"),W("unique","めずらしい・独特の"),W("quokka","クオッカ"),W("famous","有名な"),W("place","場所"),W("koala","コアラ"),W("kangaroo","カンガルー"),W("picture","写真・絵"),W("small","小さい")],
@@ -433,29 +443,22 @@ function norm(t){
     .replace(/\b(it|she|he|who|that|what)'s\b/g,'$1 is').replace(/\bha-ha\b/g,'haha').replace(/\bha ha\b/g,'haha')
     .replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim().split(' ').filter(Boolean);
 }
-function stem(w){ return w.replace(/(ies)$/,'y').replace(/(es|s|ed|ing)$/,''); }
-function edit1(a,b){ if(Math.abs(a.length-b.length)>1) return false; let i=0,j=0,d=0;
-  while(i<a.length&&j<b.length){ if(a[i]===b[j]){i++;j++;continue} if(++d>1) return false;
-    if(a.length>b.length) i++; else if(b.length>a.length) j++; else {i++;j++;} } return d+(a.length-i)+(b.length-j)<=1; }
-function wEq(a,b){ if(a===b) return true; if(stem(a)===stem(b)) return true; return a.length>=4&&b.length>=4&&edit1(a,b); }
 function lcs(a,b){ const d=Array(b.length+1).fill(0);
-  for(const x of a){ let prev=0; for(let j=1;j<=b.length;j++){ const tmp=d[j]; d[j]= wEq(x,b[j-1]) ? prev+1 : Math.max(d[j],d[j-1]); prev=tmp; } }
+  for(const x of a){ let prev=0; for(let j=1;j<=b.length;j++){ const tmp=d[j]; d[j]= x===b[j-1] ? prev+1 : Math.max(d[j],d[j-1]); prev=tmp; } }
   return d[b.length]; }
 function matchScore(heard,target){ const t=norm(target).filter(w=>!JPW.has(w)), h=norm(heard); return t.length ? lcs(t,h)/t.length : 1; }
 function listen(target,onRes,onErr){
   const r=new SR(); r.lang='en-US'; r.interimResults=false; r.maxAlternatives=5; let done=false;
-  r.onresult=e=>{ if(done) return; done=true; const alts=[...e.results[0]].map(a=>a.transcript);
+  r.onresult=e=>{ done=true; const alts=[...e.results[0]].map(a=>a.transcript);
     let best=alts[0]||'',bs=0; alts.forEach(a=>{ const sc=matchScore(a,target); if(sc>bs){bs=sc;best=a;} }); onRes(best,bs); };
-  r.onerror=e=>{ if(done) return; done=true; onErr(e.error); };
-  r.onend=()=>{ if(!done){ done=true; onErr('no-speech'); } };
+  r.onerror=e=>{ done=true; onErr(e.error); };
+  r.onend=()=>{ if(!done) onErr('no-speech'); };
   try{ speechSynthesis.cancel(); r.start(); }catch(e){ onErr('start'); }
-  setTimeout(()=>{ if(!done){ try{ r.stop(); }catch(e){} setTimeout(()=>{ if(!done){ done=true; try{r.abort()}catch(e){} onErr('no-speech'); } },1500); } },7000);
   return r;
 }
 
 /* ---------- map ---------- */
 function showMap(){
-  if(micStream){ try{ micStream.getTracks().forEach(t=>t.stop()); }catch(e){} micStream=null; }
   stopTimer();
   app.innerHTML=`
     <div class="logorow"><h1 class="logo"><span class="q">本文</span>JUMP</h1>${buddy('mapb')}</div>
@@ -481,7 +484,7 @@ function showMap(){
               <span class="stars">${allDone? q.items.filter((_,i)=>pp.paper[i]).length+'/'+q.items.length : '🔒'}</span></button>
           </div></div>`}).join('')}`).join('')}
     <div class="row" style="margin-top:18px">
-      <span class="small" style="opacity:.6;margin-right:8px">版 10/12-h</span><button class="linkbtn" id="snd">効果音：${save.sound?'オン':'オフ'}</button>
+      <button class="linkbtn" id="snd">効果音：${save.sound?'オン':'オフ'}</button>
       <button class="linkbtn" id="mreq">マイク必須：${save.micRequired?'オン':'オフ'}（保護者用・2秒長押し）</button>
     </div>`;
   app.querySelectorAll('[data-lesson]').forEach(b=>b.onclick=()=>{ sfx.tap(); startLesson(findLesson(b.dataset.lesson)); });
@@ -554,58 +557,43 @@ function itemDone(clean){
 }
 
 /* mic gate (共通) : text を声に出して言えたら onNext */
-/* ---------- 声の有無だけを見る(発音は判定しない) ---------- */
-let micStream=null, micCtx=null;
-async function levelMeter(){
-  if(!micStream) micStream=await navigator.mediaDevices.getUserMedia({audio:true});
-  micCtx=micCtx||new (window.AudioContext||window.webkitAudioContext)();
-  if(micCtx.state==='suspended') await micCtx.resume();
-  const src=micCtx.createMediaStreamSource(micStream), an=micCtx.createAnalyser(); an.fftSize=512; src.connect(an);
-  const buf=new Uint8Array(an.fftSize);
-  return { read(){ an.getByteTimeDomainData(buf); let s=0; for(const v of buf){ const x=(v-128)/128; s+=x*x; } return Math.sqrt(s/buf.length); }, stop(){ try{src.disconnect()}catch(e){} } };
-}
 function micGate(host,text,onNext,lead){
-  const useMic=!!SR&&!micBlocked;
+  const strict=save.micRequired, useMic=SR&&!micBlocked;
   host.innerHTML=`
     <div class="win">
       ${lead||''}
-      <p class="big" id="bigline">${esc(text)}</p>
-      <p class="say">${useMic?'🎤を押して、文をさいごまで声に出して読もう。':'声に出して1回言ってみよう。'}</p>
+      <p class="big">${esc(text)}</p>
+      <p class="say">${useMic?'🎤を押して、声に出して言ってみよう。':'声に出して1回言ってみよう。'}</p>
       <p class="heard" id="heard" aria-live="polite"></p>
       <div class="actions"><button class="btn" id="again">🔊 お手本</button>
-        ${useMic?`<button class="btn mic" id="mic">🎤 言ってみる</button>`:`<button class="btn go" id="next">言えた！ 次へ</button>`}</div>
+        ${useMic?`<button class="btn mic" id="mic">🎤 言ってみる</button>`: strict?``:`<button class="btn go" id="next">言えた！ 次へ</button>`}</div>
+      ${useMic&&!strict?`<p class="center" style="margin:8px 0 0"><button class="linkbtn" id="skip">マイクを使わずに次へ</button></p>`:''}
     </div>`;
   $('#again').onclick=()=>speak(text);
   const heard=$('#heard'), goNext=()=>{ sfx.tap(); onNext(); };
+  if(!useMic&&strict){ heard.textContent='この画面ではマイクが使えないので先へ進めません。おうちの人に「マイク必須」をオフにしてもらってね。'; return; }
   if(!useMic){ $('#next').onclick=goNext; return; }
-  const words=text.split(' ');
-  const keyOf=w=>norm(w).filter(x=>!JPW.has(x));
-  const counted=words.map(w=>keyOf(w).length>0);
-  const total=Math.max(1,counted.filter(Boolean).length);
-  let got=new Set(), tries=0, rec=null; const mic=$('#mic');
-  const paint=()=>{ $('#bigline').innerHTML=words.map((w,i)=>`<span style="${got.has(i)?'color:#2E9D57;text-decoration:underline':''}">${esc(w)}</span>`).join(' '); };
+  if(!strict) $('#skip').onclick=goNext;
+  let tries=0, rec=null; const mic=$('#mic');
   const toNext=label=>{ mic.classList.remove('on','mic'); mic.classList.add('go'); mic.textContent=label; mic.onclick=goNext; };
-  const NEED=[0.4,0.25,0.01];
-  const judge=said=>{
-    const h=norm(said||''); const now=new Set();
-    words.forEach((w,i)=>{ if(!counted[i]) return; const ks=keyOf(w); if(ks.every(k=>h.some(x=>wEq(k,x)))) now.add(i); });
-    now.forEach(i=>got.add(i)); paint();
-    const ratio=now.size/total, need=NEED[Math.min(tries,2)];
-    if(now.size>0 && ratio>=need){ S.mic++; sfx.coin(); setBuddy('pb','jump'); heard.className='heard ok';
-      heard.textContent=`${total}語中 ${now.size}語 きこえたよ！`; fb(ratio>=0.7?'すごい！ ばっちり伝わったよ':'いいね！ 伝わったよ','ok'); toNext('次へ'); return; }
-    tries++; setBuddy('pb',''); heard.className='heard';
-    heard.textContent=now.size?`${total}語中 ${now.size}語 きこえたよ！ あと少し`:'うまく聞きとれなかったよ';
-    if(tries>=3){ toNext('がんばった！ 次へ'); fb('3回チャレンジしたね！ 次へ進もう','ok'); return; }
-    mic.textContent='🎤 もう一度';
-    fb(tries===1?'緑じゃない単語を、はっきり言ってみよう':'次は1語でもきこえたらOK！','ok');
-  };
   mic.onclick=()=>{
-    if(rec) return; mic.classList.add('on'); mic.textContent='聞いてるよ…'; fb('どうぞ！ さいごまで読もう');
-    rec=listen(text,(said)=>{ rec=null; mic.classList.remove('on'); judge(said); },
-      err=>{ rec=null; mic.classList.remove('on');
-        if(['not-allowed','service-not-allowed','start','audio-capture'].includes(err)){
-          micBlocked=true; heard.className='heard'; heard.textContent='マイクが使えないみたい。声に出して言えたら次へ進もう。'; toNext('言えた！ 次へ');
-        } else judge(''); });
+    if(rec) return; mic.classList.add('on'); mic.textContent='聞いてるよ…'; fb('聞いてるよ。どうぞ！');
+    rec=listen(text,(said,score)=>{
+      rec=null; mic.classList.remove('on');
+      const need=tries>=3?0.6:0.8;
+      if(score>=need){ S.mic++; sfx.coin(); setBuddy('pb','jump'); heard.className='heard ok'; heard.textContent='聞こえたよ：「'+said+'」'; fb('バッチリ！','ok'); toNext('次へ'); }
+      else { tries++; S.itemMiss++; setBuddy('pb','sad'); heard.className='heard'; heard.textContent='「'+(said||'…')+'」に聞こえたよ';
+        fb(tries>=2?'おしい！ 🔊お手本を聞いてから、もう1回':'もう一度、ゆっくり言ってみよう','ng');
+        if(tries>=3&&!strict) toNext('次へ'); else mic.textContent='🎤 もう一度';
+        if(tries===3) heard.textContent+='（次からは少しゆるく判定するよ）'; }
+    },err=>{
+      rec=null; mic.classList.remove('on');
+      if(['not-allowed','service-not-allowed','start','audio-capture'].includes(err)){
+        micBlocked=true; heard.className='heard';
+        if(strict){ heard.textContent='この画面ではマイクが使えないので先へ進めません。おうちの人に「マイク必須」をオフにしてもらってね。'; mic.remove(); }
+        else { heard.textContent='マイクが使えないみたい。声に出して言えたら次へ進もう。'; toNext('言えた！ 次へ'); }
+      } else { heard.className='heard'; heard.textContent='声が聞こえなかったよ。ボタンを押してから言ってね。'; mic.textContent='🎤 もう一度'; }
+    });
   };
 }
 
@@ -831,7 +819,87 @@ const LESSONS={
     {q:'choice',s:'Does Jenny like her uniform? — No, she ___.',o:['doesn\'t','isn\'t','don\'t'],a:'doesn\'t',e:'No のときは doesn\'t'},
     {q:'choice',s:'Does your brother ___ clothes?',o:['make','makes'],a:'make',e:'Does があるので s はつけない'},
     {q:'order',ja:'彼は一日中パジャマで働きますか。',en:'Does he work in pajamas all day?'},
-    {q:'order',ja:'彼女は制服が好きではありません。',en:'She doesn\'t like her school uniform.'}]}
+    {q:'order',ja:'彼女は制服が好きではありません。',en:'She doesn\'t like her school uniform.'}]},
+  {id:'5D',name:'s・es のつけ方',sub:'テスト対策：plays / watches / washes / does / studies',
+   rule:'ほとんどの動詞は s をつける。s・x・ch・sh・o で終わる動詞は es。「子音字＋y」は y を i にかえて es。play のように y の前が a・e・o なら、そのまま s。have は has。',
+   demo:[
+    {t:['play','→','plays'],h:[2],c:'y の前が a なので、そのまま s。✗ plaies'},
+    {t:['watch','→','watches'],h:[2],c:'ch で終わる動詞は es。✗ watchs'},
+    {t:['wash','→','washes'],h:[2],c:'sh で終わる動詞も es。✗ washs'},
+    {t:['do','→','does'],h:[2],c:'o で終わる動詞は es。go → goes も同じ。✗ dos'},
+    {t:['study','→','studies'],h:[2],c:'y の前が d なので、y を i にかえて es。✗ studys'}],
+   quiz:[
+    {q:'choice',s:'Ken ___ soccer after school. (play)',o:['plays','plaies','playes'],a:'plays',e:'y の前が a → そのまま s'},
+    {q:'choice',s:'She ___ TV every night. (watch)',o:['watches','watchs','watch'],a:'watches',e:'ch で終わる → es'},
+    {q:'choice',s:'My father ___ the dishes. (wash)',o:['washes','washs','wash'],a:'washes',e:'sh で終わる → es'},
+    {q:'choice',s:'He ___ his homework after dinner. (do)',o:['does','dos','do'],a:'does',e:'o で終わる → es'},
+    {q:'choice',s:'He ___ math every day. (study)',o:['studies','studys','study'],a:'studies',e:'子音字＋y → y を i にかえて es'},
+    {q:'choice',s:'Mike ___ to the computer room every day. (go)',o:['goes','gos','go'],a:'goes',e:'o で終わる → es'},
+    {q:'choice',s:'Mr. Smith ___ in Osaka. (live)',o:['lives','lifes','live'],a:'lives',e:'live は s をつけて lives'},
+    {q:'choice',s:'Ken ___ a dog. (have)',o:['has','haves','have'],a:'has',e:'have は has になる'},
+    {q:'order',ja:'彼女は毎晩テレビを見ます。',en:'She watches TV every night.'}]},
+  {id:'5E',name:'does のあとは s をとる',sub:'テスト対策：Does Lisa speak ～? / doesn\'t have',
+   rule:'Does や doesn\'t を使ったら、s は does が持っていく。うしろの動詞は s のない形（もとの形）にもどす。has も have にもどる。',
+   demo:[
+    {t:['Lisa','speaks','Japanese.'],h:[1],c:'ふつうの文は speaks（s つき）。'},
+    {t:['Does','Lisa','speak','Japanese?'],h:[0,2],c:'Does が s を持っていくので speak。✗ Does Lisa speaks'},
+    {t:['Ken','doesn\'t','have','breakfast.'],h:[1,2],c:'has も doesn\'t のあとは have。✗ doesn\'t has'},
+    {t:['My mother','doesn\'t','drink','coffee.'],h:[1,2],c:'doesn\'t は動詞の前に置く。✗ drinksn\'t'}],
+   quiz:[
+    {q:'choice',s:'Does Lisa ___ Japanese?',o:['speak','speaks'],a:'speak',e:'Does のあとは s をとる'},
+    {q:'choice',s:'Does Ken ___ curry?',o:['like','likes'],a:'like',e:'Does のあとは s をとる'},
+    {q:'choice',s:'Does he ___ me?',o:['know','knows'],a:'know',e:'Does のあとは s をとる'},
+    {q:'choice',s:'Ken doesn\'t ___ breakfast.',o:['have','has'],a:'have',e:'doesn\'t のあとは have'},
+    {q:'choice',s:'My mother ___ coffee. (飲みません)',o:['doesn\'t drink','drinksn\'t','doesn\'t drinks'],a:'doesn\'t drink',e:'doesn\'t ＋ もとの形'},
+    {q:'choice',s:'My brother ___ on Sundays. (働きません)',o:['doesn\'t work','not works','doesn\'t works'],a:'doesn\'t work',e:'not だけではダメ。doesn\'t ＋ もとの形'},
+    {q:'order',ja:'リサは日本語を話しますか。',en:'Does Lisa speak Japanese?'},
+    {q:'order',ja:'私の母はコーヒーを飲みません。',en:'My mother doesn\'t drink coffee.'}]},
+  {id:'5F',name:'文の順番',sub:'テスト対策：Does のすぐあとに「だれが」／どう・いつは最後',
+   rule:'疑問文は「Does ＋ だれが ＋ する ＋ 何を?」。だれが（主語）は Does のすぐあと。「とても上手に」「朝食前に」「毎日」のような、どう・いつを表す語句は文の最後に置く。',
+   demo:[
+    {t:['Does','your brother','have','a car?'],h:[1],c:'だれが（your brother）は Does のすぐあと。✗ Have does your brother a car?'},
+    {t:['Does','your dog','like','balls?'],h:[1],c:'✗ Does like balls your dog? → だれがを先に。'},
+    {t:['Where','does','Mike','live?'],h:[2],c:'Where のあとも「does ＋ だれが ＋ する」の順。'},
+    {t:['She','sews','very well.'],h:[2],c:'「とても上手に」は最後。✗ She very well sews.'},
+    {t:['My brother','takes','a bath','before breakfast.'],h:[3],c:'だれが → する → 何を → いつ。「朝食前に」は最後。'}],
+   quiz:[
+    {q:'choice',s:'Does ___ like balls?',o:['your dog','like','balls'],a:'your dog',e:'Does のすぐあとは「だれが」'},
+    {q:'choice',s:'Where does Mike ___?',o:['live','lives','like'],a:'live',e:'does のあとは s をとる。住む＝live'},
+    {q:'order',ja:'あなたのお兄さんは車を持っていますか。',en:'Does your brother have a car?'},
+    {q:'order',ja:'あなたのイヌはボールが好きですか。',en:'Does your dog like balls?'},
+    {q:'order',ja:'マイクはどこに住んでいますか。',en:'Where does Mike live?'},
+    {q:'order',ja:'彼女はとても上手に縫い物をします。',en:'She sews very well.'},
+    {q:'order',ja:'私の兄は朝食前にお風呂に入ります。',en:'My brother takes a bath before breakfast.'}]},
+  {id:'5G',name:'だいじな表現と答え方',sub:'テスト対策：be proud of / ～, right? / Yes, he does.',
+   rule:'決まった言い方はまとめて覚える。Does ～? と聞かれたら、本文に書いてあるかを確かめて Yes, he does. か No, he doesn\'t. で答える。',
+   demo:[
+    {t:['Mao','is','proud of','her father.'],h:[2],c:'「〜を誇りに思う」は be proud of。'},
+    {t:['Your brother','likes','sports,','right?'],h:[3],c:'「〜だよね」は文の最後に , right?'},
+    {t:['Does','Daniel\'s uncle','often','talk about it?'],h:[2],c:'本文に My uncle often talks about it. とある。'},
+    {t:['Yes,','he','does.'],h:[0,2],c:'本文に書いてあれば Yes。答えは does で。'}],
+   quiz:[
+    {q:'choice',s:'Mao is proud ___ her father.',o:['of','that','for'],a:'of',e:'be proud of 〜'},
+    {q:'choice',s:'Your brother likes sports, ___?',o:['right','clothes','too'],a:'right',e:'「〜だよね」は , right?'},
+    {q:'choice',s:'I want to play with my dog all ___.',o:['day','days','time'],a:'day',e:'「一日中」は all day'},
+    {q:'choice',s:'Does Daniel\'s uncle often talk about Pajama Day? — ___',o:['Yes, he does.','No, he doesn\'t.','Yes, he is.'],a:'Yes, he does.',e:'本文に often talks about it とある'},
+    {q:'choice',s:'Is Pajama Day only for schools? — ___',o:['No, it isn\'t.','No, it doesn\'t.','Yes, it is.'],a:'No, it isn\'t.',e:'Is で聞かれたら is で答える。会社にもある'},
+    {q:'order',ja:'真央はお父さんを誇りに思っています。',en:'Mao is proud of her father.'}]},
+  {id:'5C',name:'Which / Whose と mine',sub:'Power-Up 2：持ち主をたずねる・答える',
+   rule:'「どっちが〜?」は Which、「だれの〜?」は Whose を先頭に。答えでは「〜のもの」を表す mine・yours・his・hers・ours や、名前に \'s をつけた形を使う。',
+   demo:[
+    {t:['Which','umbrella','is','yours?'],h:[0],c:'「どっちのかさがきみの?」は Which が先頭。'},
+    {t:['The yellow one','is','mine.'],h:[2],c:'mine は「私のもの」。one は umbrella のくり返しをさける言い方。'},
+    {t:['Whose','umbrella','is','the blue one?'],h:[0],c:'「だれのかさ?」は Whose が先頭。'},
+    {t:['It\'s','Mao\'s.'],h:[1],c:'名前に \'s をつけると「〜のもの」になる。'}],
+   quiz:[
+    {q:'choice',s:'___ umbrella is the blue one? — It\'s Mao\'s.',o:['Whose','Which','Who'],a:'Whose',e:'持ち主(だれの)をたずねる → Whose'},
+    {q:'choice',s:'___ pen case is yours, the big one or the small one?',o:['Which','Whose','What'],a:'Which',e:'2つのうち「どっち」→ Which'},
+    {q:'choice',s:'Whose pen is this? — It\'s ___. (私のもの)',o:['mine','my','me'],a:'mine',e:'「私のもの」は mine'},
+    {q:'choice',s:'This bike is ___. (彼女のもの)',o:['hers','her','she'],a:'hers',e:'「彼女のもの」は hers'},
+    {q:'choice',s:'This bike is ___. (彼のもの)',o:['his','him','he'],a:'his',e:'his は「彼の」と「彼のもの」が同じ形'},
+    {q:'choice',s:'This bike is ___. (私たちのもの)',o:['ours','our','us'],a:'ours',e:'「私たちのもの」は ours'},
+    {q:'order',ja:'青いのはだれのかさですか。',en:'Whose umbrella is the blue one?'},
+    {q:'order',ja:'黄色いのが私のものです。',en:'The yellow one is mine.'}]}
  ],
  6:[
   {id:'6A',name:'him / her / them',sub:'「〜を・〜に」の形の代名詞',
