@@ -894,6 +894,23 @@ const LESSONS={
     {q:'choice',s:'Does Daniel\'s uncle often talk about Pajama Day? — ___',o:['Yes, he does.','No, he doesn\'t.','Yes, he is.'],a:'Yes, he does.',e:'本文に often talks about it とある'},
     {q:'choice',s:'Is Pajama Day only for schools? — ___',o:['No, it isn\'t.','No, it doesn\'t.','Yes, it is.'],a:'No, it isn\'t.',e:'Is で聞かれたら is で答える。会社にもある'},
     {q:'order',ja:'真央はお父さんを誇りに思っています。',en:'Mao is proud of her father.'}]},
+  {id:'5H',name:'is か does か',sub:'テスト対策：質問の最初の単語で答える',
+   rule:'答えは「質問の最初の単語」で返す。Is → is、Are → am / are、Do → do、Does → does。疑問文を作るときは、文に am・is・are があれば前に出す。なければ Do / Does を先頭に足す。',
+   demo:[
+    {t:['Is','Daniel','from the U.K.?'],h:[0],c:'Is で聞かれたら……'},
+    {t:['Yes,','he','is.'],h:[2],c:'is で答える。✗ Yes, he does.'},
+    {t:['Do','you','speak','English?'],h:[0],c:'speak のような動詞の文は Do / Does。✗ Are you speak English?'},
+    {t:['Yes,','I','do.'],h:[2],c:'Do で聞かれたら do で答える。'}],
+   quiz:[
+    {q:'choice',s:'Is Daniel from the U.K.? — Yes, he ___.',o:['is','does'],a:'is',e:'Is で聞かれたら is'},
+    {q:'choice',s:'Does Daniel like curry? — No, he ___.',o:['doesn\'t','isn\'t'],a:'doesn\'t',e:'Does で聞かれたら doesn\'t'},
+    {q:'choice',s:'Is Pajama Day common in the U.S.? — Yes, it ___.',o:['is','does'],a:'is',e:'Is で聞かれたら is'},
+    {q:'choice',s:'___ you speak English?',o:['Do','Are'],a:'Do',e:'speak（動詞）の文 → Do'},
+    {q:'choice',s:'___ this your desk?',o:['Is','Does'],a:'Is',e:'is の文 → Is を前に'},
+    {q:'choice',s:'___ Jenny live in New York?',o:['Does','Is'],a:'Does',e:'live（動詞）の文で、主語が1人 → Does'},
+    {q:'choice',s:'___ Jenny from New York?',o:['Is','Does'],a:'Is',e:'from の前に動詞がない → be動詞の文。Is'},
+    {q:'order',ja:'あなたは英語を話しますか。',en:'Do you speak English?'},
+    {q:'order',ja:'ダニエルはイギリスの出身ですか。',en:'Is Daniel from the U.K.?'}]},
   {id:'5C',name:'Which / Whose と mine',sub:'Power-Up 2：持ち主をたずねる・答える',
    rule:'「どっちが〜?」は Which、「だれの〜?」は Whose を先頭に。答えでは「〜のもの」を表す mine・yours・his・hers・ours や、名前に \'s をつけた形を使う。',
    demo:[
