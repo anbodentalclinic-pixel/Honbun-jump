@@ -385,9 +385,23 @@ let save={parts:{},sound:true,micRequired:true};
 try{ const r=localStorage.getItem(KEY); if(r) save=Object.assign(save,JSON.parse(r)); }catch(e){}
 function persist(){ try{ localStorage.setItem(KEY,JSON.stringify(save)); }catch(e){} }
 
+
+/* ===== 保護者おためしモード（記録を残さない・60分で自動オフ）===== */
+const TRIAL_MIN=60;
+function trialOn(){ return !!(save.trialUntil && Date.now()<save.trialUntil); }
+function trialLabel(){ if(!trialOn()) return '保護者おためしモード：オフ（2秒長押しでオン）'; const m=Math.ceil((save.trialUntil-Date.now())/60000); return `保護者おためしモード：オン（あと${m}分で自動オフ・2秒長押しでオフ）`; }
+function bindTrial(btn,after){
+  if(!btn) return; let t=null;
+  const down=e=>{ e.preventDefault(); btn.textContent='そのまま押し続けて…'; t=setTimeout(()=>{ t=null; save.trialUntil=trialOn()?0:Date.now()+TRIAL_MIN*60000; persist(); after&&after(); },2000); };
+  const up=()=>{ if(t){ clearTimeout(t); t=null; btn.textContent=trialLabel(); } };
+  btn.addEventListener('pointerdown',down); ['pointerup','pointerleave','pointercancel'].forEach(ev=>btn.addEventListener(ev,up));
+  btn.addEventListener('contextmenu',e=>e.preventDefault());
+}
+
 /* ===== まちがい記録（Googleスプレッドシート）との同期 ===== */
 const SYNC={url:'https://script.google.com/macros/s/AKfycbz-3seMZTiFcJRscHxa_l1DoeDtET405w5_YxsgjsRPx1coF2oPQlFWbZgOgpXz88vZsA/exec',key:'dxyqERe2VfS4JL_4',app:'本文JUMP'};
 function syncAdd(r){
+  if(trialOn()) return; // おためし中はスプレッドシートに送らない
   save.outbox=save.outbox||[];
   save.outbox.push(Object.assign({time:new Date().toISOString(),app:SYNC.app},r));
   persist();
@@ -530,12 +544,14 @@ function showMap(){
       <button class="linkbtn" id="snd">効果音：${save.sound?'オン':'オフ'}</button>
       <button class="linkbtn" id="mreq">マイク必須：${save.micRequired?'オン':'オフ'}（保護者用・2秒長押し）</button>
     </div>
-    <p class="small" style="margin-top:6px">版 10/29-sync　記録：${(save.outbox||[]).length?'送信待ち '+save.outbox.length+'件':'送信ずみ'}</p>`;
+    <p class="small" style="margin-top:6px"><button class="linkbtn" id="trialBtn" style="${trialOn()?'color:#B91C1C;font-weight:800;text-decoration:none':''}">${trialLabel()}</button></p>
+    <p class="small" style="margin-top:6px">版 10/29-trial　記録：${(save.outbox||[]).length?'送信待ち '+save.outbox.length+'件':'送信ずみ'}</p>`;
   app.querySelectorAll('[data-lesson]').forEach(b=>b.onclick=()=>{ sfx.tap(); startLesson(findLesson(b.dataset.lesson)); });
   app.querySelectorAll('[data-read]').forEach(b=>b.onclick=()=>{ sfx.tap(); showReader(findPart(b.dataset.read)); });
   app.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>{ sfx.tap(); startLevel(findPart(b.dataset.p),+b.dataset.l); });
   app.querySelectorAll('[data-paper]').forEach(b=>b.onclick=()=>{ sfx.tap(); showPaper(findPart(b.dataset.paper)); });
   $('#mapb').onclick=()=>{ sfx.coin(); setBuddy('mapb','jump'); };
+  bindTrial($('#trialBtn'),showMap);
   $('#snd').onclick=()=>{ save.sound=!save.sound; persist(); showMap(); };
   { const b=$('#mreq'); let t=null;
     const down=e=>{ e.preventDefault(); b.textContent='そのまま押し続けて…'; t=setTimeout(()=>{ save.micRequired=!save.micRequired; persist(); sfx.coin(); showMap(); },2000); };
@@ -581,7 +597,7 @@ function startLevel(q,l){
 }
 function hud(){
   return `<div class="hud"><button class="back" id="back">マップ</button>
-    <span class="name">${esc(S.title)}</span>
+    <span class="name">${esc(S.title)}${trialOn()?'<span style="color:#B91C1C">（おためし）</span>':''}</span>
     <span class="meta">${S.done}/${S.total}<span class="combo">${S.combo>=2?' 🔥'+S.combo:''}</span></span></div>`;
 }
 function bindBack(){ $('#back').onclick=()=>{ try{speechSynthesis.cancel();}catch(e){} showMap(); }; }
@@ -1080,7 +1096,7 @@ function renderConcept(){
 /* ---------- result ---------- */
 function showResult(){
   const mi=S.missItems.size, n= mi===0?3 : mi<=2?2 : 1;
-  if(S.kind==='lesson'){ const L=S.L, prev=save.lessons[L.id]; save.lessons[L.id]={stars:Math.max(prev?prev.stars:0,n)}; persist(); sfx.fan();
+  if(S.kind==='lesson'){ const L=S.L, prev=save.lessons[L.id]; if(!trialOn()){ save.lessons[L.id]={stars:Math.max(prev?prev.stars:0,n)}; persist(); } sfx.fan();
     const sib=Object.values(LESSONS).find(a=>a.some(x=>x.id===L.id)), nx=sib[sib.indexOf(L)+1];
     app.innerHTML=`<div class="card center">${buddy('rb','cheer')}<h2>${esc(L.name)} クリア</h2><div class="bigstars">${starStr(n)}</div>
       <p>${n===3?'ノーミス! ルールはばっちり。':n===2?'いいね。あと少し。':'クリア! もう一度やるとルールが身につくよ。'}</p>
@@ -1089,7 +1105,7 @@ function showResult(){
       <p class="center"><button class="linkbtn" id="map">マップへ戻る</button></p>`;
     $('#retry').onclick=()=>startLesson(L); $('#to').onclick=()=> nx? startLesson(nx) : showMap(); $('#map').onclick=showMap; window.scrollTo(0,0); return; }
   const pp=P(S.q.id), prev=pp.lv[S.l];
-  pp.lv[S.l]={stars:Math.max(prev?prev.stars:0,n)}; persist(); sfx.fan();
+  if(!trialOn()){ pp.lv[S.l]={stars:Math.max(prev?prev.stars:0,n)}; persist(); } sfx.fan();
   const msg= n===3?'ノーミス！ 完ぺき。': n===2?'いいね。あと少しでノーミス。':'クリア！ もう一度やると星が増えるかも。';
   const nx=S.l<MAXLV, q=S.q, l=S.l;
   app.innerHTML=`
@@ -1121,7 +1137,7 @@ function showPaper(q){
     </div><p class="center small" id="pdone"></p>`;
   $('#back').onclick=showMap;
   const upd=()=>{ const c=q.items.filter((_,i)=>pp.paper[i]).length; $('#pdone').textContent= c===q.items.length?'全部できた！ おつかれさま。':`${c} / ${q.items.length}`; };
-  app.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.onchange=()=>{ pp.paper[cb.dataset.i]=cb.checked; persist(); if(cb.checked) sfx.coin(); upd(); });
+  app.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.onchange=()=>{ if(!trialOn()){ pp.paper[cb.dataset.i]=cb.checked; persist(); } if(cb.checked) sfx.coin(); upd(); });
   app.querySelectorAll('[data-show]').forEach(b=>b.onclick=e=>{ e.preventDefault(); const a=$('#a'+b.dataset.show); a.hidden=false; b.remove(); speak(a.textContent); });
   upd(); window.scrollTo(0,0);
 }
