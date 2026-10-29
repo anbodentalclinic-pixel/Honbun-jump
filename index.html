@@ -384,6 +384,38 @@ const KEY='honbun-jump-v2';
 let save={parts:{},sound:true,micRequired:true};
 try{ const r=localStorage.getItem(KEY); if(r) save=Object.assign(save,JSON.parse(r)); }catch(e){}
 function persist(){ try{ localStorage.setItem(KEY,JSON.stringify(save)); }catch(e){} }
+
+/* ===== まちがい記録（Googleスプレッドシート）との同期 ===== */
+const SYNC={url:'https://script.google.com/macros/s/AKfycbz-3seMZTiFcJRscHxa_l1DoeDtET405w5_YxsgjsRPx1coF2oPQlFWbZgOgpXz88vZsA/exec',key:'dxyqERe2VfS4JL_4',app:'本文JUMP'};
+function syncAdd(r){
+  save.outbox=save.outbox||[];
+  save.outbox.push(Object.assign({time:new Date().toISOString(),app:SYNC.app},r));
+  persist();
+  clearTimeout(syncAdd.t); syncAdd.t=setTimeout(syncFlush,2000);
+}
+function syncFlush(){
+  const box=(save.outbox||[]).slice(0,150);
+  if(!box.length || !navigator.onLine) return;
+  const body=JSON.stringify({key:SYNC.key,records:box});
+  let sent=false;
+  try{ if(navigator.sendBeacon) sent=navigator.sendBeacon(SYNC.url,new Blob([body],{type:'text/plain;charset=utf-8'})); }catch(e){}
+  if(!sent){ try{ fetch(SYNC.url,{method:'POST',mode:'no-cors',keepalive:true,headers:{'Content-Type':'text/plain;charset=utf-8'},body}); sent=true; }catch(e){} }
+  if(sent){ save.outbox=(save.outbox||[]).slice(box.length); persist(); if(save.outbox.length) setTimeout(syncFlush,1500); }
+}
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') syncFlush(); });
+window.addEventListener('online',syncFlush);
+
+function logItem(clean){
+  const it=S.item; if(!it) return;
+  if(S.kind!=='lesson' && S.m && S.m.type==='read') return;
+  if(clean && S.retried && S.retried.has(it._id)) return; // その場でやり直して正解した分は数えない
+  let rec;
+  if(S.kind==='lesson') rec={kind:'文法',item:S.L.name,correct:it.q==='choice'?fillBlank(it.s,it.a):it.en,program:'P'+String(S.L.id).charAt(0)};
+  else if(S.m.type==='words') rec={kind:'単語',item:it.en,correct:it.en,program:'P'+String(S.q.id).split('-')[0]};
+  else rec={kind:'本文',item:it.en,correct:it.en,program:'P'+String(S.q.id).split('-')[0]};
+  rec.result=clean?'○':'×'; rec.input=clean?'':(S.lastInput||'');
+  syncAdd(rec);
+}
 save.lessons=save.lessons||{};
 const P = id => save.parts[id] || (save.parts[id]={lv:{},paper:{}});
 const unlocked = (id,l) => l===1 || !!P(id).lv[l-1];
@@ -470,7 +502,7 @@ function greenWords(text,said){
 
 /* ---------- map ---------- */
 function showMap(){
-  stopTimer();
+  stopTimer(); syncFlush();
   app.innerHTML=`
     <div class="logorow"><h1 class="logo"><span class="q">本文</span>JUMP</h1>${buddy('mapb')}</div>
         ${save.micRequired && !SR ? `<p class="warn">このブラウザは音声認識に対応していないため、マイク必須のままだと音読のところで先へ進めません。iPhone の Safari か Android の Chrome で開くか、下の「マイク必須」をオフにしてください。</p>`:''}
@@ -497,7 +529,8 @@ function showMap(){
     <div class="row" style="margin-top:18px">
       <button class="linkbtn" id="snd">効果音：${save.sound?'オン':'オフ'}</button>
       <button class="linkbtn" id="mreq">マイク必須：${save.micRequired?'オン':'オフ'}（保護者用・2秒長押し）</button>
-    </div>`;
+    </div>
+    <p class="small" style="margin-top:6px">版 10/29-sync　記録：${(save.outbox||[]).length?'送信待ち '+save.outbox.length+'件':'送信ずみ'}</p>`;
   app.querySelectorAll('[data-lesson]').forEach(b=>b.onclick=()=>{ sfx.tap(); startLesson(findLesson(b.dataset.lesson)); });
   app.querySelectorAll('[data-read]').forEach(b=>b.onclick=()=>{ sfx.tap(); showReader(findPart(b.dataset.read)); });
   app.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>{ sfx.tap(); startLevel(findPart(b.dataset.p),+b.dataset.l); });
@@ -556,11 +589,12 @@ function fb(text,cls=''){ const f=$('#fb'); if(!f) return; f.className='fb bubbl
 function nextItem(){
   const it=S.queue.shift();
   if(!it) return showResult();
-  S.item=it; S.solved=false; S.itemMiss=0;
+  S.item=it; S.solved=false; S.itemMiss=0; S.lastInput='';
   if(S.kind==='lesson') return it.q==='choice'?renderConcept():renderPuzzle();
   ({read:renderRead,choice:renderChoice,je:renderJE,puzzle:renderPuzzle,words:renderWord})[S.m.type]();
 }
 function itemDone(clean){
+  logItem(clean);
   const it=S.item;
   if(clean){ S.combo++; S.best=Math.max(S.best,S.combo); }
   else { S.combo=0; S.missItems.add(it._id); if(!S.retried.has(it._id)&&!(S.m&&S.m.type==='read')){ S.retried.add(it._id); S.queue.push({...it}); } }
@@ -650,7 +684,7 @@ function renderChoice(){
     speak(it.en,()=>{ b.textContent='🔊 もう一度聞く'; b.classList.add('done'); app.querySelectorAll('.opt').forEach(o=>o.disabled=false); fb('どの意味かな？'); }); };
   app.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
     if(S.solved) return; S.solved=true;
-    const ok=opts[+b.dataset.i].ja===it.ja;
+    const ok=opts[+b.dataset.i].ja===it.ja; S.lastInput=opts[+b.dataset.i].ja;
     app.querySelectorAll('.opt').forEach((o,j)=>{ if(opts[j].ja===it.ja) o.classList.add('good'); o.disabled=true; });
     if(ok){ sfx.coin(); setBuddy('pb','jump'); fb('正解！','ok'); itemDone(true); setTimeout(nextItem,900); }
     else { b.classList.add('bad'); S.misses++; sfx.ng(); setBuddy('pb','sad'); fb('おしい！ 緑が正解。あとでもう一回出るよ','ng'); itemDone(false); setTimeout(nextItem,2200); }
@@ -670,7 +704,7 @@ function renderJE(){
   bindBack();
   app.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
     if(S.solved) return; S.solved=true;
-    const ok=opts[+b.dataset.i].en===it.en;
+    const ok=opts[+b.dataset.i].en===it.en; S.lastInput=opts[+b.dataset.i].en;
     app.querySelectorAll('.opt').forEach((o,j)=>{ if(opts[j].en===it.en) o.classList.add('good'); o.disabled=true; });
     if(ok){ sfx.coin(); setBuddy('pb','jump'); fb('正解！ 声に出して言ってみよう','ok'); }
     else { b.classList.add('bad'); S.misses++; S.itemMiss++; sfx.ng(); setBuddy('pb','sad'); fb('おしい！ 緑が正解。正しい文を言ってみよう','ng'); }
@@ -695,7 +729,7 @@ function renderWord(){
   if(ej){ $('#say').onclick=()=>speak(it.en); setTimeout(()=>speak(it.en),150); }
   app.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
     if(S.solved) return; S.solved=true;
-    const ok=opts[+b.dataset.i].en===it.en;
+    const ok=opts[+b.dataset.i].en===it.en; S.lastInput=ej?opts[+b.dataset.i].ja:opts[+b.dataset.i].en;
     app.querySelectorAll('.opt').forEach((o,j)=>{ if(opts[j].en===it.en) o.classList.add('good'); o.disabled=true; });
     if(!ej) speak(it.en);
     if(ok){ sfx.coin(); setBuddy('pb','jump'); fb(S.combo>=2?`正解！ ${S.combo+1}コンボ`:'正解！','ok'); itemDone(true); setTimeout(nextItem,900); }
@@ -757,7 +791,7 @@ function check(){
     const text=S.item.en; sfx.coin(); speak(text); fb('やったね！','ok'); setBuddy('pb','jump');
     $('#bottom').innerHTML=`<div class="win"><div class="row"><strong style="color:var(--ok)">正解！</strong>${S.combo>=3?`<span class="pop">${S.combo} コンボ</span>`:''}</div><p class="big">${esc(text)}</p><div class="actions"><button class="btn" id="again">🔊 もう一度</button><button class="btn go" id="next">次へ</button></div></div>`; $('#again').onclick=()=>speak(text); $('#next').onclick=()=>{ sfx.tap(); nextItem(); }; return;
   }
-  S.misses++; S.itemMiss++; S.combo=0; sfx.ng(); setBuddy('pb','sad');
+  S.misses++; S.itemMiss++; S.combo=0; sfx.ng(); setBuddy('pb','sad'); if(!S.lastInput) S.lastInput=toks.join(' ');
   const rail=$('#rail'); rail.classList.remove('shake'); void rail.offsetWidth; rail.classList.add('shake');
   const i=firstWrong(toks);
   if(i>=toks.length && toks.length<S.ans.length) fb(`ここまでは合ってる！ ブロックがまだ足りないよ`,'ng');
@@ -1031,7 +1065,7 @@ function renderConcept(){
   bindBack();
   app.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
     if(S.solved) return; S.solved=true;
-    const ok=opts[+b.dataset.i]===it.a;
+    const ok=opts[+b.dataset.i]===it.a; S.lastInput=opts[+b.dataset.i];
     app.querySelectorAll('.opt').forEach((o,j)=>{ if(opts[j]===it.a) o.classList.add('good'); o.disabled=true; });
     const full=fillBlank(it.s,it.a);
     if(ok){ sfx.coin(); setBuddy('pb','jump'); fb('正解！ '+it.e,'ok'); }
